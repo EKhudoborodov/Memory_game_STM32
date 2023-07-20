@@ -16,8 +16,8 @@ use embassy_time::{Duration, Timer};
 
 use {defmt_rtt as _, panic_probe as _};
 
-fn make_map() -> [bool; 304] {
-    let map: [bool; 304] = [
+fn make_map() -> [bool; 320] {
+    let map: [bool; 320] = [
         true, true, true, true, true, true, false, false, // 0
         false, true, true, false, false, false, false, false, // 1
         true, true, false, true, true, false, true, false, // 2
@@ -29,9 +29,9 @@ fn make_map() -> [bool; 304] {
         true, true, true, true, true, true, true, false, // 8
         true, true, true, true, false, true, true, false, // 9
         true, true, true, false, true, true, true, false, // A
-        false, false, true, true, true, true, true, false, // B
+        false, false, true, true, true, true, true, false, // b
         true, false, false, true, true, true, false, false, // C
-        false, true, true, true, true, false, true, false, // D
+        false, true, true, true, true, false, true, false, // d
         true, false, false, true, true, true, true, false, // E
         true, false, false, false, true, true, true, false, // F
         true, false, true, true, true, true, false, false, // G
@@ -55,7 +55,9 @@ fn make_map() -> [bool; 304] {
         false, true, true, true, false, true, true, false, // Y
         true, true, false, true, true, false, true, false, // Z
         false, false, false, false, false, false, true, false, // -
-        false, false, false, true, false, false, false, false // _
+        false, false, false, true, false, false, false, false, // _
+        true, true, true, true, true, true, true, true, // B.
+        true, true, true, true, true, true, false, true // D.
     ];
     return map;
 }
@@ -66,7 +68,9 @@ struct LedAndKey<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>{
     clk: Output<'d, CLK>,
     dio: Flex<'d, DIO>,
     pos: u8,
-    map: [bool; 304]
+    b_skin: bool,
+    d_skin: bool,
+    map: [bool; 320]
 }
 
 impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin> LedAndKey <'d, STB1, STB2, CLK, DIO> {
@@ -79,7 +83,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin> LedAndKey <'d, STB1, STB2, C
         stbb. set_high();
         clka.set_low();
         dioa.set_as_input_output(Speed::Low, Pull::Up);
-        Self { stb1: stba, stb2:stbb, clk: clka, dio: dioa, pos: 0, map: make_map() }
+        Self { stb1: stba, stb2:stbb, clk: clka, dio: dioa, pos: 0, b_skin: false, d_skin: false, map: make_map() }
     }
 
     fn turn_on_display(&mut self, bright: u8){
@@ -196,8 +200,22 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin> LedAndKey <'d, STB1, STB2, C
         let mut count: usize = 0; let mut pos: usize = 0;
         if (character == '-'){ pos = 288; }
         else if (character == '_') { pos = 296; }
+        else if (character == 'b' || character == 'B'){
+            if (self.b_skin){
+                pos = 304;
+            } else {
+                pos = 88;
+            }
+        }
+        else if (character == 'd' || character == 'D') {
+            if(self.d_skin){
+                pos = 312;
+            } else {
+                pos = 104;
+            }
+        }
         else if((character as u8)<58) { pos = (character as usize - 48) * 8; }
-        else if((character as u8) < 97) { pos = 80 + 8 * (character as usize - 65);}
+        else if((character as u8)<97) { pos = 80 + 8 * (character as usize - 65);}
         else { pos = 80 + 8 * (character as usize - 97); }
         while(count<8){
             if(self.map[pos + count]){ self.dio.set_high(); } else { self.dio.set_low(); }
@@ -209,7 +227,6 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin> LedAndKey <'d, STB1, STB2, C
 
     fn print(&mut self, s: &str){
         let mut count: u8 = 0;
-        println!("{}", self.pos);
         for ch in s.chars(){
             if(count==16){ break; }
             if ((ch >='0' && ch <= '9') || (ch>='a' && ch <= 'z') || (ch == '-') || (ch == '_') ){
@@ -218,7 +235,6 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin> LedAndKey <'d, STB1, STB2, C
                 self.pos += 1;
                 self.pos %= 32;
                 count += 1;
-                println!("{}", self.pos);
                 if (self.pos == 0) { self.stb2.set_high(); ; self.move_cursor(0); }
                 else if(self.pos == 16){ self.stb1.set_high(); self.move_cursor(16); }
             }
@@ -324,14 +340,199 @@ async fn loading <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>(mut display: &mu
         Timer::after(Duration::from_millis(100)).await;
         count += 1;
     }
+}
+
+fn start <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>(mut display: &mut LedAndKey<'d, STB1, STB2, CLK, DIO>, bright:u8){
+    display.turn_on_display(bright);
     display.clean_display();
-    count = 0;
+    display.move_cursor(0);
+    display.print("start");
+    display.move_cursor(16);
+    display.print("settings");
+    let mut count = 0;
     while (count < 16) {
         display.move_cursor(count*2+1);
         display.full_byte();
         count += 1;
     }
     display.stb2.set_high();
+}
+
+fn start_menu<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>(mut display: &mut LedAndKey<'d, STB1, STB2, CLK, DIO>) -> bool{
+    let mut flag1: bool = true; let mut flag2: bool = true;
+    let mut c: usize = 0;
+    let mut pressed: u64 = 0;
+    let mut buttons: [bool; 16] = [false; 16];
+    let mut tmp1: [bool; 16] = [false; 16];
+    let mut tmp2: [bool; 16] = [false; 16];
+    while (flag1) {
+        buttons = display.read_key();
+        c = 0;
+        for but in buttons {
+            if (but) {
+                flag1 = false;
+            }
+            tmp1[c] = but;
+            c += 1;
+        }
+    }
+    flag2 = true;
+    display.stb1.set_high();
+    display.stb2.set_high();
+    while (flag2) {
+        buttons = display.read_key();
+        c = 0;
+        flag2 = false;
+        for but in buttons {
+            if (but) {
+                flag2 = true;
+            }
+            tmp2[c] = tmp1[c];
+            tmp1[c] = but;
+            c += 1;
+        }
+    }
+    c = 1;
+    for but in tmp2 {
+        if (but) {
+            pressed = c as u64;
+            break;
+        }
+        c += 1;
+    }
+    return pressed < 9;
+}
+
+fn start_settings<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>(
+    mut display: &mut LedAndKey<'d, STB1, STB2, CLK, DIO>,
+    difficulty: u8,
+    bright: u8,
+    fixed: u8,
+){
+    display.clean_display();
+    display.move_cursor(0);
+    display.print("back");
+    display.move_cursor(10);
+    display.print_char('b');
+    display.move_cursor(14);
+    display.print_char('d');
+    display.move_cursor(16);
+    display.print("d");
+    if(difficulty<10){ display.print_char((difficulty + ('0' as u8)) as char); }
+    else { display.print_char((difficulty + ('a' as u8)) as char); }
+    display.move_cursor(22);
+    display.print("b");
+    display.print_char((bright + ('1' as u8)) as char);
+    display.move_cursor(28);
+    if(fixed == 1){ display.print("fy"); }
+    else { display.print("fn"); }
+    let mut count: u8 = 0;
+    while (count < 16) {
+        display.move_cursor(count*2+1);
+        display.full_byte();
+        count += 1;
+    }
+    display.stb2.set_high();
+}
+
+fn settings<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>(
+    mut display: &mut LedAndKey<'d, STB1, STB2, CLK, DIO>,
+    difficulty: u8,
+    bright: u8,
+    fixed: u8,
+) -> [u8; 3]{
+    let mut flag1: bool = true; let mut flag2: bool = true; let mut back: bool = true;
+    let mut c: usize = 0;
+    let mut pressed: u64 = 0;
+    let mut res: [u8; 3] = [difficulty, bright, fixed];
+    flag1 = true;
+    while(back) {
+        let mut buttons: [bool; 16] = [false; 16];
+        let mut tmp1: [bool; 16] = [false; 16];
+        let mut tmp2: [bool; 16] = [false; 16];
+        pressed = 5;
+        while (flag1) {
+            buttons = display.read_key();
+            c = 0;
+            for but in buttons {
+                if (but) {
+                    flag1 = false;
+                }
+                tmp1[c] = but;
+                c += 1;
+            }
+        }
+        flag2 = true;
+        display.stb1.set_high();
+        display.stb2.set_high();
+        while (flag2) {
+            buttons = display.read_key();
+            c = 0;
+            flag2 = false;
+            for but in buttons {
+                if (but) {
+                    flag2 = true;
+                }
+                tmp2[c] = tmp1[c];
+                tmp1[c] = but;
+                c += 1;
+            }
+        }
+        c = 1;
+        for but in tmp2 {
+            if (but) {
+                pressed = c as u64;
+                break;
+            }
+            c += 1;
+        }
+        if(pressed < 5){
+            back = false;
+        }
+        else if (pressed == 6){
+            display.b_skin = !(display.b_skin);
+            display.move_cursor(0);
+            display.print_char('b');
+            display.move_cursor(10);
+            display.print_char('b');
+            if(res[0] == 11){
+                display.move_cursor(18);
+                display.print_char('b');
+            }
+            display.move_cursor(22);
+            display.print_char('b');
+        }
+        else if (pressed == 8) {
+            display.d_skin = !(display.d_skin);
+            display.move_cursor(14);
+            display.print_char('d');
+            display.move_cursor(16);
+            display.print_char('d');
+            if(res[0] == 13){
+                display.move_cursor(18);
+                display.print_char('d');
+            }
+        }
+        else if (pressed == 9 || pressed == 10) {
+            res[0] %= 16; res[0] += 1;
+            display.move_cursor(18);
+            if(res[0]<10){ display.print_char((res[0] + ('0' as u8))as char); }
+            else { display.print_char(((res[0]%10) + ('a' as u8)) as char); }
+        }
+        else if (pressed == 12 || pressed == 13){
+            res[1] += 1; res[1] %= 8;
+            display.turn_on_display(res[1]);
+            display.move_cursor(24);
+            display.print_char((res[1] + ('1' as u8)) as char);
+        }
+        else if (pressed == 15 || pressed == 16){
+            res[2] = 1 - res[2];
+            display.move_cursor(30);
+            if(res[2] == 1){ display.print_char('y'); }
+            else { display.print_char('n'); }
+        }
+    }
+    return res;
 }
 
 async fn round_start <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>(mut display: &mut LedAndKey<'d, STB1, STB2, CLK, DIO>){
@@ -373,7 +574,8 @@ async fn show_digits<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>(
     mut display: &mut LedAndKey<'d, STB1, STB2, CLK, DIO>,
     r: u64,
     difficulty: u8,
-    max: u64
+    max: u64,
+    fixed: u8
 ) -> [u64; 10] {
     let mut count: u64 = 0;
     let mut res: [u64; 10] = [0; 10];
@@ -381,8 +583,12 @@ async fn show_digits<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>(
         let mut generator = SmallRng::seed_from_u64(r+count);
         let mut rand_num = generator.gen_range(1..=max);
         res[count as usize] = rand_num;
-        //println!("{}: {}", (r+count), rand_num);
-        display.move_cursor(((rand_num - 1) * 2) as u8);
+        if(fixed == 1){ display.move_cursor(((rand_num - 1) * 2) as u8); }
+        else {
+            let mut generator = SmallRng::seed_from_u64(r+count+128);
+            let mut rand_pos = generator.gen_range(1..=max);
+            display.move_cursor(((rand_pos - 1) * 2) as u8);
+        }
         if(rand_num>9){ display.print_char(((rand_num as u8) - 10 + ('a' as u8)) as char); }
         else { display.print_char(((rand_num as u8) + ('0' as u8)) as char); }
         display.full_byte();
@@ -483,7 +689,7 @@ async fn game_over <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin>(mut display: &
     display.print("GAMEOVER");
     let mut count: u8 = 0;
     display.stb1.set_high(); display.stb2.set_high();
-    while (count<8) {
+    while (count<16) {
         display.move_cursor(count*2+1);
         display.full_byte();
         count += 1;
@@ -509,29 +715,38 @@ async fn main(_spawner: Spawner) -> ! {
     let mut count: u64 = 0;
     let mut pressed: u8 = 0;
     let mut difficulty: u8 = 5;
+    let mut bright: u8 = 7;
     let mut score: u64 = 0;
     let mut tmp: [u64; 2] = [0, 0];
+    let mut set: [u8; 3];
     let mut game_is_on: bool = false;
     let mut buttons: [u64; 10] = [0; 10];
+    let mut fixed: u8 = 1;
     led.set_high();
-    display.turn_on_display(7);
+    display.turn_on_display(bright);
     display.clean_display();
+    loading(&mut display).await;
     loop {
-
-        if (game_is_on == false) {
-            loading(&mut display).await;
-            tmp = button_listen(&mut display, count);
-            difficulty = tmp[0] as u8;
-            game_is_on = true;
-            score = 0;
-            count = tmp[1];
+        while (game_is_on == false) {
+            start(&mut display, bright);
+            if (start_menu(&mut display)) {
+                game_is_on = true;
+                score = 0;
+            }else{
+                start_settings(&mut display, difficulty, bright, fixed);
+                set = settings(&mut display, difficulty, bright, fixed);
+                difficulty = set[0];
+                bright = set[1];
+                fixed = set[2];
+            }
+            count += 1;
         }
         count %= 1e15 as u64;
         led.set_high();
         round_start(&mut display).await;
         led.set_low();
         Timer::after(Duration::from_millis(200)).await;
-        buttons = show_digits(&mut display, count, difficulty, 16).await;
+        buttons = show_digits(&mut display, count, difficulty, 16, fixed).await;
         count+=(3+(difficulty-1)/2) as u64;
         pressed = 0;
         while (pressed<3+(difficulty-1)/2) {
