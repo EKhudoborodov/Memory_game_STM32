@@ -5,17 +5,18 @@
 mod TM1638;
 mod functional;
 
-
-use TM1638::LedAndKey;
+use functional::Game;
 use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
 use rand::RngCore;
 use core::arch::asm;
 use cortex_m::asm::delay;
+use defmt::export::display;
 use defmt::println;
 use embassy_executor::Spawner;
 use embassy_stm32::{self, gpio::{Level, Output, Speed}, into_ref, Peripheral};
 use embassy_stm32::gpio::{Flex, Input, Pin, Pull};
+use embassy_stm32::gpio::Level::Low;
 use embassy_stm32::peripherals::{PB7, PB8, PB9};
 use embassy_time::{Duration, Timer};
 
@@ -24,24 +25,35 @@ use {defmt_rtt as _, panic_probe as _};
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) -> ! {
     let p = embassy_stm32::init(Default::default());
-    let mut display = LedAndKey::new(p.PB9, p.PB8, p.PB7, p.PB6);
-    //println!("{}, {}", display.stb1.is_set_high(), display.stb2.is_set_high());
+    let mut game= Game::new(p.PB9, p.PB8, p.PB7, p.PB6, p.PB4, p.PB3, p.PA12, p.PA11, p.PA10, p.PB14, p.PB15, p.PA8, p.PA9);
+    //let mut display = LedAndKey::new(p.PB9, p.PB8, p.PB7, p.PB6);
     let mut led = Output::new(p.PC13, Level::Low, Speed::Low);
-    let mut count: u64 = 7;
-    let mut pressed: u8 = 0;
-    let mut difficulty: u8 = 2;
-    let mut brightness: u8 = 7;
-    let mut score: u64 = 0;
-    let mut tmp: [u64; 2] = [0, 0];
-    let mut set: [u8; 3] = [0; 3];
-    let mut game_is_on: bool = false;
-    let mut buttons: [u64; 10] = [0; 10];
-    let mut fixed: u8 = 1;
+    let mut end:bool = false;
+    let mut tmp: [u64; 17] = [0;17];
     led.set_high();
-    display.turn_on_display(brightness);
-    display.clean_display();
-    functional::loading(&mut display).await;
+    game.loading().await;
     loop {
+        game.start();
+        if(!game.start_menu()){
+            game.start_settings();
+            game.settings();
+        }else{
+            while true {
+                end = false;
+                game.round_start().await;
+                let showed = game.show_digits().await;
+                while true {
+                    tmp = game.button_listen();
+                    if tmp[16] == 1 { end = true; break; }
+                    if tmp[16] == 2 { break; }
+                }
+                if end { break; }
+                let mut inputted: [u64; 16]= [0; 16]; let mut i: usize = 0;
+                while i<16 { inputted[i] = tmp[i]; i+=1; }
+                if !game.check_answer(showed, inputted).await { break; }
+            }
+        }
+        /*
         while game_is_on == false {
             functional::start(&mut display, brightness);
             if functional::start_menu(&mut display) {
@@ -57,10 +69,7 @@ async fn main(_spawner: Spawner) -> ! {
             count += 1;
         }
         count %= 1e15 as u64;
-        led.set_high();
         functional::round_start(&mut display).await;
-        led.set_low();
-        Timer::after(Duration::from_millis(200)).await;
         buttons = functional::show_digits(&mut display, count, difficulty, 16, fixed).await;
         count+=(3+(difficulty-1)/2) as u64;
         pressed = 0;
@@ -77,6 +86,6 @@ async fn main(_spawner: Spawner) -> ! {
         if game_is_on {
             score += 1;
             functional::right_answer(&mut display, score).await;
-        }
+        }*/
     }
 }
