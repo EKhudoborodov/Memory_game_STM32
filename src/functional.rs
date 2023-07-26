@@ -384,6 +384,11 @@ impl<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I4
     fn quit(&mut self) {
         self.board.display_move_cursor(0);
         let mut i: u8 = 0;
+        while i < 8 {
+            self.board.display_send_byte([0; 8]);
+            self.board.display_send_byte([0; 8]);
+            i += 1;
+        } self.board.display_move_cursor(16);
         while i < 16 {
             self.board.display_send_byte([0; 8]);
             self.board.display_send_byte([0; 8]);
