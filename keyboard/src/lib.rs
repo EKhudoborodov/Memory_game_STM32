@@ -81,17 +81,3 @@ impl <'d, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin
         return keys;
     }
 }
-
-/*pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}*/

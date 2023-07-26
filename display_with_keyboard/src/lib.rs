@@ -115,83 +115,86 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
         self.reprint();
         while true {
             pressed = self.get_pressed();
-            if pressed == 20{ break; }
-            if pressed == 19 { res[17] = 1; break; }
-            if pressed == 1 && f2 {
-                f2 = false;
-                self.reprint();
-                blinking = [0; 16];
-                count = tmp; position = 16;
-                self.cursor(blinking);
-            }
-            else if pressed == 6 && !f2 {
-                self.make_keyboard();
-                f2 = true;
-                tmp = count;
-                count = 16; position = 0;
-                blinking = [0; 16]; blinking[0] = 1;
-                self.cursor(blinking);
-            }
-            else if ((pressed == 5) && ((position+count) > 16)) && !zero {
-                blinking[position-1] = 1;
-                if position<16 { blinking[position] = 0; }
-                position -= 1;
-                self.cursor(blinking);
-            }
-            else if ((pressed == 15) && (((position<16) && (!f2)) || ((position<15) && (f2))) && !zero){
-                position += 1;
-                blinking[position-1] = 0;
-                if position<16 { blinking[position] = 1; }
-                self.cursor(blinking);
-            }
-            else if pressed%5>1 && pressed<15 && !f2{
-                if zero {
-                    character = (((pressed%5-2)*3+(pressed-pressed%5)/5) + ('a' as u8)) as char;
-                    if (character as u8)>('g' as u8){ character = 'g'; }
+            match pressed {
+                20 => { break; }
+                19 => { res[17] = 1; break; }
+                1 if f2 => {
+                    f2 = false;
+                    self.reprint();
+                    blinking = [0; 16];
+                    count = tmp; position = 16;
+                    self.cursor(blinking);
                 }
-                else { character = ((pressed%5-2)*3+(pressed-pressed%5)/5 + ('1' as u8)) as char; }
-                if position<16 {
-                    self.display_move_cursor((position as u8)*2);
-                    self.print_char(character, position);
-                } else if ((count as u8) < max) {
-                    if !zero {
+                6 if !f2 => {
+                    self.make_keyboard();
+                    f2 = true;
+                    tmp = count;
+                    count = 16; position = 0;
+                    blinking = [0; 16]; blinking[0] = 1;
+                    self.cursor(blinking);
+                }
+                5 if position+count > 16 && !zero => {
+                    blinking[position-1] = 1;
+                    if position<16 { blinking[position] = 0; }
+                    position -= 1;
+                    self.cursor(blinking);
+                }
+                15 if ((position<16 && !f2) || (position<15 && f2)) && !zero => {
+                    position += 1;
+                    blinking[position-1] = 0;
+                    if position<16 { blinking[position] = 1; }
+                    self.cursor(blinking);
+                }
+                p if p%5>1 && p<15 && !f2 => {
+                    if zero {
+                        character = (((pressed%5-2)*3+(pressed-pressed%5)/5) + ('a' as u8)) as char;
+                        if (character as u8)>('g' as u8){ character = 'g'; }
+                    }
+                    else { character = ((pressed%5-2)*3+(pressed-pressed%5)/5 + ('1' as u8)) as char; }
+                    if position<16 {
+                        self.display_move_cursor((position as u8)*2);
+                        self.print_char(character, position);
+                    } else if ((count as u8) < max) {
+                        if !zero {
+                            self.change_is_on(1);
+                            self.reprint();
+                        }
+                        self.display_move_cursor(30);
+                        self.print_char(character, 15);
+                        count += 1;
+                    }
+                    zero = false;
+                }
+                10 if f2 => {
+                    self.change_is_on(1);
+                    self.is_on[15] = (position+1) as u64;
+                    tmp += 1;
+                }
+                10 if !f2 => {
+                    if position == 16 && (count as u8)<max{
                         self.change_is_on(1);
                         self.reprint();
+                        self.display_move_cursor(30);
+                        zero = true;
+                        self.print_char('-', 16);
                     }
-                    self.display_move_cursor(30);
-                    self.print_char(character, 15);
-                    count += 1;
+                    else if position < 16 {
+                        zero = true;
+                        self.display.move_cursor(2*(position as u8));
+                        self.print_char('-', 16);
+                    }
                 }
-                zero = false;
-            }
-            else if ((pressed%5>1 && pressed<15) || pressed == 10) && (f2){
-                self.change_is_on(1);
-                self.is_on[15] = (position+1) as u64;
-                tmp += 1;
-            }
-            else if pressed == 10 && !f2{
-                if position == 16 && (count as u8)<max{
-                    self.change_is_on(1);
-                    self.reprint();
-                    self.display_move_cursor(30);
-                    zero = true;
-                    self.print_char('-', 16);
+                11 => {
+                    self.is_on = [20; 16];
+                    if !f2 {self.reprint();}
+                    count = 0; tmp = 0;
                 }
-                else if position < 16 {
-                    zero = true;
-                    self.display.move_cursor(2*(position as u8));
-                    self.print_char('-', 16);
+                16 if count>0 => {
+                    self.change_is_on(-1);
+                    if !f2 {self.reprint();}
+                    count -= 1;
                 }
-            }
-            else if pressed == 11{
-                self.is_on = [20; 16];
-                if !f2 {self.reprint();}
-                count = 0; tmp = 0;
-            }
-            else if pressed == 16 && count>0{
-                self.change_is_on(-1);
-                if !f2 {self.reprint();}
-                count -= 1;
+                _ => {}
             }
             thing_for_small_random+=1; thing_for_small_random %= 1e15 as u64;
         }
@@ -210,7 +213,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
 
     fn change_is_on(&mut self, edit: isize){
         let mut i: isize = 0; let m: isize = edit;
-        if edit >0 {
+        if edit > 0 {
             while (i + m) < 16 {
                 if self.is_on[(i + m) as usize] < 20 { self.is_on[i as usize] = self.is_on[(i+m) as usize]; }
                 i += 1;

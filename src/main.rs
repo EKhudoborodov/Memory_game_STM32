@@ -25,7 +25,6 @@ use {defmt_rtt as _, panic_probe as _};
 async fn main(_spawner: Spawner) -> ! {
     let p = embassy_stm32::init(Default::default());
     let mut game= Game::new(p.PB9, p.PB8, p.PB7, p.PB6, p.PB4, p.PB3, p.PA12, p.PA11, p.PA10, p.PB14, p.PB15, p.PA8, p.PA9);
-    //let mut display = LedAndKey::new(p.PB9, p.PB8, p.PB7, p.PB6);
     let mut led = Output::new(p.PC13, Level::Low, Speed::Low);
     let mut end:bool = false;
     let mut tmp: [u64; 17] = [0;17];
