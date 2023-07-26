@@ -1,0 +1,12 @@
+[package]
+name = "display_with_keyboard"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+embassy-stm32.workspace = true
+embassy-time.workspace = true
+defmt.workspace = true
+
+display.workspace = true
+keyboard.workspace = true

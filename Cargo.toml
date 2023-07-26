@@ -3,33 +3,47 @@ name = "abc"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-anyhow = { version = "1.0.71", default-features = false }
-rand = { version = "0.8.3", features = ["small_rng"], default-features = false }
-defmt = "0.3.4"
-defmt-rtt = "0.4.0"
-cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
-cortex-m-rt = "0.7.3"
-panic-probe = "0.3.1"
+[workspace]
+members = ["display", "keyboard", "display_with_keyboard"]
 
-[dependencies.embassy-sync]
+[workspace.dependencies.embassy-sync]
 version = "0.2.0"
 git = "https://github.com/embassy-rs/embassy.git"
 features = ["nightly"]
+
+[workspace.dependencies.embassy-stm32]
+version = "0.1.0"
+git = "https://github.com/embassy-rs/embassy.git"
+features = ["nightly", "stm32f411ce", "time-driver-any", "exti"]
+
+[workspace.dependencies.embassy-time]
+version = "0.1.0"
+git = "https://github.com/embassy-rs/embassy.git"
+features = ["defmt"]
+
+[workspace.dependencies]
+defmt = "0.3.5"
+keyboard = { path = "keyboard" }
+display = { path = "display" }
 
 [dependencies.embassy-executor]
 version = "0.2.0"
 git = "https://github.com/embassy-rs/embassy.git"
 features = ["nightly", "defmt", "integrated-timers", "arch-cortex-m", "executor-thread"]
 
-[dependencies.embassy-stm32]
-version = "0.1.0"
-git = "https://github.com/embassy-rs/embassy.git"
-features = ["nightly", "stm32f411ce", "time-driver-any", "exti"]
+[dependencies]
+anyhow = { version = "1.0.71", default-features = false }
+rand = { version = "0.8.3", features = ["small_rng"], default-features = false }
 
-[dependencies.embassy-time]
-version = "0.1.0"
-git = "https://github.com/embassy-rs/embassy.git"
-features = ["defmt"]
+defmt.workspace = true
+defmt-rtt = "0.4.0"
 
+embassy-stm32.workspace = true
+embassy-time.workspace = true
+embassy-sync.workspace = true
 
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7.3"
+panic-probe = "0.3.1"
+
+display_with_keyboard = { path = "display_with_keyboard" }

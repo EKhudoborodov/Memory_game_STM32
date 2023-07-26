@@ -2,7 +2,6 @@
 #![no_main]
 #![feature(type_alias_impl_trait)]
 
-mod TM1638;
 mod functional;
 
 use functional::Game;

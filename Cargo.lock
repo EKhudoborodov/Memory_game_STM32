@@ -11,6 +11,7 @@ dependencies = [
  "cortex-m-rt",
  "defmt",
  "defmt-rtt",
+ "display_with_keyboard",
  "embassy-executor",
  "embassy-stm32",
  "embassy-sync",
@@ -214,6 +215,26 @@ checksum = "609923761264dd99ed9c7d209718cda4631c5fe84668e0f0960124cbb844c49f"
 dependencies = [
  "critical-section",
  "defmt",
+]
+
+[[package]]
+name = "display"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+ "embassy-stm32",
+ "embassy-time",
+]
+
+[[package]]
+name = "display_with_keyboard"
+version = "0.1.0"
+dependencies = [
+ "defmt",
+ "display",
+ "embassy-stm32",
+ "embassy-time",
+ "keyboard",
 ]
 
 [[package]]
@@ -497,6 +518,14 @@ name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
+
+[[package]]
+name = "keyboard"
+version = "0.1.0"
+dependencies = [
+ "embassy-stm32",
+ "embassy-time",
+]
 
 [[package]]
 name = "lock_api"
