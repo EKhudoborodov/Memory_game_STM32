@@ -6,7 +6,6 @@ use embassy_stm32::{self, gpio::{Level, Output, Speed}, into_ref, Peripheral};
 use embassy_stm32::gpio::{Flex, Input, Pin, Pull};
 use embassy_stm32::peripherals::{PB7, PB8, PB9};
 use embassy_stm32::time::khz;
-use embassy_time::{Duration, Timer};
 
 pub struct Keyboard <'d, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin, O4: Pin>{
     i1: Input<'d, I1>,
@@ -44,11 +43,11 @@ impl <'d, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin
             3 => { self.o4.set_high(); }
             _ => {}
         }
-        if(self.i1.is_high()){ keys[0] = 1; }
-        if(self.i2.is_high()){ keys[1] = 1; }
-        if(self.i3.is_high()){ keys[2] = 1; }
-        if(self.i4.is_high()){ keys[3] = 1; }
-        if(self.i5.is_high()){ keys[4] = 1; }
+        if self.i1.is_high(){ keys[0] = 1; }
+        if self.i2.is_high(){ keys[1] = 1; }
+        if self.i3.is_high(){ keys[2] = 1; }
+        if self.i4.is_high(){ keys[3] = 1; }
+        if self.i5.is_high(){ keys[4] = 1; }
         match column {
             0 => { self.o1.set_low(); }
             1 => { self.o2.set_low(); }

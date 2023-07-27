@@ -25,22 +25,22 @@ use {defmt_rtt as _, panic_probe as _};
 async fn main(_spawner: Spawner) -> ! {
     let p = embassy_stm32::init(Default::default());
     let mut game= Game::new(p.PB9, p.PB8, p.PB7, p.PB6, p.PB4, p.PB3, p.PA12, p.PA11, p.PA10, p.PB14, p.PB15, p.PA8, p.PA9);
-    let mut led = Output::new(p.PC13, Level::Low, Speed::Low);
+    let mut led = Output::new(p.PC13, Low, Speed::Low);
     let mut end:bool = false;
     let mut tmp: [u64; 17] = [0;17];
     led.set_high();
     game.loading().await;
     loop {
         game.start();
-        if(!game.start_menu()){
+        if !game.start_menu() {
             game.start_settings();
             game.settings();
         }else{
-            while true {
+            loop {
                 end = false;
                 game.round_start().await;
                 let showed = game.show_digits().await;
-                while true {
+                loop {
                     tmp = game.button_listen();
                     if tmp[16] == 1 { end = true; break; }
                     if tmp[16] == 2 { break; }

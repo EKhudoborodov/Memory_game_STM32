@@ -82,9 +82,9 @@ impl Map {
             'D' => { return self.map[39].value }
             c if c>='0' && c<='9' => { return self.map[c as usize-'0' as usize].value }
             c if c>='a' && c<='z' => { return self.map[10+c as usize-'a' as usize].value }
-            _ => {return self.map[0].value;}
+            _ => {}
         }
-
+        return [0; 8];
     }
 }
 
@@ -117,7 +117,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin> LedAndKey <'d, STB1, STB2, C
     pub fn send_byte(&mut self, command: [u8; 8]){
         let mut i: i32 = 7;
         while i >= 0 {
-            if(command[i as usize] == 1){ self.dio.set_high(); } else { self.dio.set_low(); }
+            if command[i as usize] == 1 { self.dio.set_high(); } else { self.dio.set_low(); }
             self.clk.set_high(); self.clk.set_low();
             i-=1;
         }

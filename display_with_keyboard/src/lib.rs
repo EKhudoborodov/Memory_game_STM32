@@ -19,7 +19,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
     pub fn new(s1:STB1, s2:STB2, c:CLK, d:DIO, i1: I1, i2: I2, i3: I3, i4: I4, i5: I5, o1: O1, o2: O2, o3: O3, o4: O4) -> DisplayAndKeyboard<'d, STB1, STB2, CLK, DIO, I1, I2, I3, I4, I5, O1, O2, O3, O4>{
         let mut display = LedAndKey::new(s1, s2, c, d);
         let mut keyboard = Keyboard::new(i1, i2, i3, i4, i5, o1, o2, o3, o4);
-        Self {display: display, keyboard: keyboard, is_on: [20; 16]}
+        Self { display, keyboard, is_on: [20; 16]}
     }
 
     pub fn turn_on_display(&mut self, brightness: u8){
@@ -113,7 +113,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
         let mut pressed: u8 = 0;
         let mut res: [u64; 18] = [0; 18]; count = 0;
         self.reprint();
-        while true {
+        loop {
             pressed = self.get_pressed();
             match pressed {
                 20 => { break; }
@@ -154,7 +154,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
                     if position<16 {
                         self.display_move_cursor((position as u8)*2);
                         self.print_char(character, position);
-                    } else if ((count as u8) < max) {
+                    } else if (count as u8) < max {
                         if !zero {
                             self.change_is_on(1);
                             self.reprint();
