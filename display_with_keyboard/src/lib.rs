@@ -5,21 +5,21 @@
 use display::LedAndKey;
 use keyboard::Keyboard;
 use embassy_stm32::{self, Peripheral};
-use embassy_stm32::gpio::{Pin, Pull};
+use embassy_stm32::gpio::{AnyPin, Pin, Pull};
 use embassy_stm32::time::khz;
 use embassy_time::{Duration, Timer};
 
-pub struct DisplayAndKeyboard <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin, O4: Pin> {
-    display: LedAndKey<'d, STB1, STB2, CLK, DIO>,
-    keyboard: Keyboard<'d, I1, I2, I3, I4, I5, O1, O2, O3, O4>,
-    is_on: [u64; 16]
+pub struct DisplayAndKeyboard <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: usize, const ROW: usize, const COL: usize, const BUTK: usize> {
+    display: LedAndKey<'d, DIS, BUTD, CLK, DIO, SIZE>,
+    keyboard: Keyboard<'d, ROW, COL, BUTK>,
+    is_on: [u64; BUTD]
 }
 
-impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin, O4: Pin> DisplayAndKeyboard<'d, STB1, STB2, CLK, DIO, I1, I2, I3, I4, I5, O1, O2, O3, O4>{
-    pub fn new(s1:STB1, s2:STB2, c:CLK, d:DIO, i1: I1, i2: I2, i3: I3, i4: I4, i5: I5, o1: O1, o2: O2, o3: O3, o4: O4) -> DisplayAndKeyboard<'d, STB1, STB2, CLK, DIO, I1, I2, I3, I4, I5, O1, O2, O3, O4>{
-        let mut display = LedAndKey::new(s1, s2, c, d);
-        let mut keyboard = Keyboard::new(i1, i2, i3, i4, i5, o1, o2, o3, o4);
-        Self { display, keyboard, is_on: [20; 16]}
+impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: usize, const ROW: usize, const COL: usize, const BUTK: usize> DisplayAndKeyboard<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK>{
+    pub fn new(s: [AnyPin; DIS], c:CLK, d:DIO, for_game: [u8; BUTD], for_map: [u8; SIZE], inputs: [AnyPin; ROW], outputs: [AnyPin; COL], for_key: [u8; BUTK]) -> DisplayAndKeyboard<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK>{
+        let mut display = LedAndKey::new(s,  c, d, for_game, for_map);
+        let mut keyboard = Keyboard::new(inputs, outputs, for_key);
+        Self { display, keyboard, is_on: [20; BUTD]}
     }
 
     pub fn turn_on_display(&mut self, brightness: u8){
@@ -32,7 +32,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
 
     pub fn clean_display(&mut self){
         self.display.clean_display();
-        self.is_on = [20; 16];
+        self.is_on = [20; BUTD];
     }
 
     pub fn print(&mut self, s: &str){
@@ -44,7 +44,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
     }
 
     pub fn display_move_cursor(&mut self, position: u8){
-        self.display.move_cursor(position);
+        self.display.move_cursor(position as usize);
     }
 
     pub fn swap_b_skin(&mut self){
@@ -57,7 +57,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
 
     pub fn print_char(&mut self, character: char, cur: usize){
         self.display.print_char(character);
-        if cur != 16 {
+        if cur != BUTD {
             if (character as u8) >= ('0' as u8) && (character as u8) <= ('9' as u8){self.is_on[cur] = (character as u64) - ('0' as u64);}
             else { self.is_on[cur] = (character as u64) - ('a' as u64) + 10;}
         }
@@ -66,9 +66,9 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
     pub fn get_pressed(&mut self) -> u8 {
         let mut c: usize = 0;
         let mut flag1: bool = true; let mut flag2: bool = true;
-        let mut buttons: [u8; 20] = [0; 20];
-        let mut tmp1: [u8; 20] = [0; 20];
-        let mut tmp2: [u8; 20] = [0; 20];
+        let mut buttons: [u8; BUTK] = [0; BUTK];
+        let mut tmp1: [u8; BUTK] = [0; BUTK];
+        let mut tmp2: [u8; BUTK] = [0; BUTK];
         let mut pressed: u8 = 0;
         while flag1 {
             buttons = self.keyboard.read_key();
@@ -122,24 +122,24 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
                     f2 = false;
                     self.reprint();
                     blinking = [0; 16];
-                    count = tmp; position = 16;
+                    count = tmp; position = BUTD;
                     self.cursor(blinking);
                 }
                 6 if !f2 => {
                     self.make_keyboard();
                     f2 = true;
                     tmp = count;
-                    count = 16; position = 0;
+                    count = BUTD; position = 0;
                     blinking = [0; 16]; blinking[0] = 1;
                     self.cursor(blinking);
                 }
-                5 if position+count > 16 && !zero => {
+                5 if position+count > BUTD && !zero => {
                     blinking[position-1] = 1;
-                    if position<16 { blinking[position] = 0; }
+                    if position<BUTD { blinking[position] = 0; }
                     position -= 1;
                     self.cursor(blinking);
                 }
-                15 if ((position<16 && !f2) || (position<15 && f2)) && !zero => {
+                15 if ((position<BUTD && !f2) || (position+1<BUTD && f2)) && !zero => {
                     position += 1;
                     blinking[position-1] = 0;
                     if position<16 { blinking[position] = 1; }
@@ -151,7 +151,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
                         if (character as u8)>('g' as u8){ character = 'g'; }
                     }
                     else { character = ((pressed%5-2)*3+(pressed-pressed%5)/5 + ('1' as u8)) as char; }
-                    if position<16 {
+                    if position<BUTD {
                         self.display_move_cursor((position as u8)*2);
                         self.print_char(character, position);
                     } else if (count as u8) < max {
@@ -167,25 +167,25 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
                 }
                 10 if f2 => {
                     self.change_is_on(1);
-                    self.is_on[15] = (position+1) as u64;
+                    self.is_on[BUTD-1] = (position+1) as u64;
                     tmp += 1;
                 }
                 10 if !f2 => {
-                    if position == 16 && (count as u8)<max{
+                    if position == BUTD && (count as u8)<max{
                         self.change_is_on(1);
                         self.reprint();
                         self.display_move_cursor(30);
                         zero = true;
-                        self.print_char('-', 16);
+                        self.print_char('-', BUTD);
                     }
-                    else if position < 16 {
+                    else if position < BUTD {
                         zero = true;
-                        self.display.move_cursor(2*(position as u8));
-                        self.print_char('-', 16);
+                        self.display.move_cursor(2*position);
+                        self.print_char('-', BUTD);
                     }
                 }
                 11 => {
-                    self.is_on = [20; 16];
+                    self.is_on = [20; BUTD];
                     if !f2 {self.reprint();}
                     count = 0; tmp = 0;
                 }
@@ -230,7 +230,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
 
     fn reprint(&mut self){
         let mut i: usize = 0;
-        while i < 16 {
+        while i < BUTD {
             self.display_move_cursor((i*2) as u8);
             if self.is_on[i] < 10 {self.print_char((self.is_on[i] as u8 + ('0' as u8)) as char, i);}
             else if self.is_on[i] < 17 { self.print_char(((self.is_on[i]%10) as u8 + ('a' as u8)) as char, i); }
@@ -241,7 +241,7 @@ impl <'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I
 
     pub fn cursor(&mut self, blinking: [u8; 16]){
         let mut i: usize = 0;
-        while i<16 {
+        while i<BUTD {
             if blinking[i] == 1{
                 self.display_move_cursor((i*2+1) as u8);
                 self.display_send_byte([1; 8]);

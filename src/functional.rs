@@ -11,15 +11,15 @@ use cortex_m::asm::delay;
 use defmt::println;
 use embassy_executor::Spawner;
 use embassy_stm32::{self, gpio::{Level, Output, Speed}, into_ref, Peripheral};
-use embassy_stm32::gpio::{Flex, Input, Pin, Pull};
+use embassy_stm32::gpio::{AnyPin, Flex, Input, Pin, Pull};
 use embassy_stm32::peripherals::{PB7, PB8, PB9};
 use embassy_time::{Duration, Timer};
 
 use {defmt_rtt as _, panic_probe as _};
 use display_with_keyboard::DisplayAndKeyboard;
 
-pub(crate) struct Game<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin, O4: Pin> {
-    board: DisplayAndKeyboard<'d, STB1, STB2, CLK, DIO, I1, I2, I3, I4, I5, O1, O2, O3, O4>,
+pub(crate) struct Game<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: usize, const ROW: usize, const COL: usize, const BUTK: usize> {
+    board: DisplayAndKeyboard<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK>,
     difficulty: u8,
     brightness: u8,
     fixed: u8,
@@ -28,9 +28,9 @@ pub(crate) struct Game<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2
     score: u64,
 }
 
-impl<'d, STB1: Pin, STB2: Pin, CLK: Pin, DIO: Pin, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin, O4: Pin> Game<'d, STB1, STB2, CLK, DIO, I1, I2, I3, I4, I5, O1, O2, O3, O4> {
-    pub(crate) fn new(s1: STB1, s2: STB2, c: CLK, d: DIO, i1: I1, i2: I2, i3: I3, i4: I4, i5: I5, o1: O1, o2: O2, o3: O3, o4: O4) -> Game<'d, STB1, STB2, CLK, DIO, I1, I2, I3, I4, I5, O1, O2, O3, O4> {
-        let b = DisplayAndKeyboard::new(s1, s2, c, d, i1, i2, i3, i4, i5, o1, o2, o3, o4);
+impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: usize, const ROW: usize, const COL: usize, const BUTK: usize> Game<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK> {
+    pub(crate) fn new(s: [AnyPin; DIS], c: CLK, d: DIO, for_game: [u8; BUTD], for_map: [u8; SIZE], inputs: [AnyPin; ROW], outputs: [AnyPin; COL], for_key: [u8; BUTK]) -> Game<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK> {
+        let b = DisplayAndKeyboard::new(s, c, d, for_game, for_map, inputs, outputs, for_key);
         Self { board: b, difficulty: 2, brightness: 4, fixed: 1, max: 16, thing_for_small_random: 0, score: 0 }
     }
 

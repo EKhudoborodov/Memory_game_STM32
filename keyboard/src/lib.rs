@@ -2,23 +2,67 @@
 #![no_main]
 #![feature(type_alias_impl_trait)]
 
+use core::ptr::{addr_of_mut, null, null_mut};
 use embassy_stm32::{self, gpio::{Level, Output, Speed}, into_ref, Peripheral};
-use embassy_stm32::gpio::{Flex, Input, Pin, Pull};
+use embassy_stm32::gpio::{Flex, Input, Pin, Pull, AnyPin};
 use embassy_stm32::peripherals::{PB7, PB8, PB9};
 use embassy_stm32::time::khz;
 
-pub struct Keyboard <'d, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin, O4: Pin>{
-    i1: Input<'d, I1>,
-    i2: Input<'d, I2>,
-    i3: Input<'d, I3>,
-    i4: Input<'d, I4>,
-    i5: Input<'d, I5>,
-    o1: Output<'d, O1>,
-    o2: Output<'d, O2>,
-    o3: Output<'d, O3>,
-    o4: Output<'d, O4>,
+
+pub struct Keyboard <'d, const ROW: usize, const COL: usize, const BUTK: usize>{
+    input: [Input<'d, AnyPin>; ROW],
+    output: [Output<'d, AnyPin>; COL]
+}
+fn init_row<'d> (p: AnyPin) -> Input<'d, AnyPin>{
+    into_ref!(p);
+    Input::new(p, Pull::Down)
 }
 
+fn init_col<'d> (p: AnyPin) -> Output<'d, AnyPin>{
+    into_ref!(p);
+    Output::new(p, Level::Low, Speed::Low)
+}
+
+impl <'d, const ROW: usize, const COL: usize, const BUTK: usize> Keyboard<'d, ROW, COL, BUTK>{
+    pub fn new(mut inputs: [AnyPin; ROW], mut outputs: [AnyPin; COL], for_key: [u8; BUTK]) -> Self{
+        Self { input: inputs.map(init_row), output: outputs.map(init_col) }
+    }
+
+    fn read_column(&mut self, column: usize) -> [u8; ROW]{
+        let mut keys: [u8; ROW] = [0; ROW];
+        self.output[column].set_high();
+        let mut i: usize = 0;
+        while i<ROW {
+            if self.input[i].is_high() { keys[i] = 1; }
+            i += 1;
+        }
+        self.output[column].set_low();
+        return keys;
+    }
+
+    /*
+    0 - F1, 5 - F2, 10 - #,  15 - *,
+    1 - 1,  6 - 2,  11 - 3,  16 - ^,
+    2 - 4,  7 - 5,  12 - 6,  17 - v,
+    3 - 7,  8 - 8,  13 - 9,  18 - Esc,
+    4 - <-, 9 - 0,  14 - ->, 19 - Ent,
+     */
+    pub fn read_key(&mut self) -> [u8; BUTK]{
+        let mut keys: [u8; BUTK] = [0; BUTK];
+        let mut i: usize = 0; let mut j: usize = 0;
+        while i<COL {
+            let tmp: [u8; ROW] = self.read_column(i);
+            j = 0;
+            while j<ROW {
+                keys[i*COL+j] = tmp[j];
+                j += 1;
+            }
+            i+=1;
+        }
+        return keys;
+    }
+}
+/*
 impl <'d, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin, O4: Pin>Keyboard <'d, I1, I2, I3, I4, I5, O1, O2, O3, O4>{
     pub fn new(i1: I1, i2: I2, i3: I3, i4: I4, i5: I5, o1: O1, o2: O2, o3: O3, o4: O4) -> Keyboard<'d ,I1, I2, I3, I4, I5, O1, O2, O3, O4>{
         let mut i1 = Input::new(i1, Pull::Down);
@@ -58,13 +102,6 @@ impl <'d, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin
         return keys;
     }
 
-    /*
-    0 - F1, 5 - F2, 10 - #,  15 - *,
-    1 - 1,  6 - 2,  11 - 3,  16 - ^,
-    2 - 4,  7 - 5,  12 - 6,  17 - v,
-    3 - 7,  8 - 8,  13 - 9,  18 - Esc,
-    4 - <-, 9 - 0,  14 - ->, 19 - Ent,
-     */
     pub fn read_key(&mut self) -> [u8; 20]{
         let mut keys: [u8; 20] = [0; 20];
         let mut column:u8 = 0;
@@ -79,4 +116,4 @@ impl <'d, I1: Pin, I2: Pin, I3: Pin, I4: Pin, I5: Pin, O1: Pin, O2: Pin, O3: Pin
         }
         return keys;
     }
-}
+}*/
