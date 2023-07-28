@@ -9,7 +9,7 @@ use embassy_stm32::peripherals::{PB7, PB8, PB9};
 use embassy_stm32::time::khz;
 
 
-pub struct Keyboard <'d, const ROW: usize, const COL: usize, const BUTK: usize>{
+pub struct Keyboard <'d, const ROW: usize, const COL: usize>{
     input: [Input<'d, AnyPin>; ROW],
     output: [Output<'d, AnyPin>; COL]
 }
@@ -23,8 +23,8 @@ fn init_col<'d> (p: AnyPin) -> Output<'d, AnyPin>{
     Output::new(p, Level::Low, Speed::Low)
 }
 
-impl <'d, const ROW: usize, const COL: usize, const BUTK: usize> Keyboard<'d, ROW, COL, BUTK>{
-    pub fn new(mut inputs: [AnyPin; ROW], mut outputs: [AnyPin; COL], for_key: [u8; BUTK]) -> Self{
+impl <'d, const ROW: usize, const COL: usize, const BUTK: usize> Keyboard<'d, ROW, COL>{
+    pub fn new(mut inputs: [AnyPin; ROW], mut outputs: [AnyPin; COL]) -> Self{
         Self { input: inputs.map(init_row), output: outputs.map(init_col) }
     }
 
@@ -41,25 +41,99 @@ impl <'d, const ROW: usize, const COL: usize, const BUTK: usize> Keyboard<'d, RO
     }
 
     /*
-    0 - F1, 5 - F2, 10 - #,  15 - *,
-    1 - 1,  6 - 2,  11 - 3,  16 - ^,
-    2 - 4,  7 - 5,  12 - 6,  17 - v,
-    3 - 7,  8 - 8,  13 - 9,  18 - Esc,
-    4 - <-, 9 - 0,  14 - ->, 19 - Ent,
+    [
+    [0 - F1, 1 - F2, 2 - #,  3 - *],
+    [0 - 1,  1 - 2,  2 - 3,  3 - ^],
+    [0 - 4,  1 - 5,  2 - 6,  3 - v],
+    [0 - 7,  1 - 8,  2 - 9,  3 - Esc],
+    [0 - <-, 1 - 0,  2 - ->, 3 - Ent]
+    ]
      */
-    pub fn read_key(&mut self) -> [u8; BUTK]{
-        let mut keys: [u8; BUTK] = [0; BUTK];
+    pub fn read_key(&mut self) -> [[u8; ROW]; COL]{
+        let mut keys: [[u8; ROW]; COL] = [[0; ROW]; COL];
         let mut i: usize = 0; let mut j: usize = 0;
         while i<COL {
             let tmp: [u8; ROW] = self.read_column(i);
             j = 0;
             while j<ROW {
-                keys[i*COL+j] = tmp[j];
+                keys[i][j] = tmp[j];
                 j += 1;
             }
             i+=1;
         }
         return keys;
+    }
+
+    pub fn get_pressed(&mut self) -> &str{
+        let keys: [[u8; ROW]; COL] = self.read_key();
+        let mut i: usize = 0; let mut j: usize = 0;
+        let mut s: &str = "";
+        while i<COL{
+            j = 0;
+            while j<ROW {
+                if keys[i][j] == 1{
+                    match i {
+                        0 => {
+                            match j {
+                                0 => { s = "F1"; }
+                                1 => { s = "F2"; }
+                                2 => { s = "#"; }
+                                3 => { s = "*"; }
+                                _ => {}
+                            }
+                        }
+                        1 => {
+                            match j {
+                                0 => { s = "1"; }
+                                1 => { s = "2"; }
+                                2 => { s = "3"; }
+                                3 => { s = "^"; }
+                                _ => {}
+                            }
+                        }
+                        2 => {
+                            match j {
+                                0 => { s = "4"; }
+                                1 => { s = "5"; }
+                                2 => { s = "6"; }
+                                3 => { s = "v"; }
+                                _ => {}
+                            }
+                        }
+                        3 => {
+                            match j {
+                                0 => { s = "7"; }
+                                1 => { s = "8"; }
+                                2 => { s = "9"; }
+                                3 => { s = "Esc"; }
+                                _ => {}
+                            }
+                        }
+                        4 => {
+                            match j {
+                                0 => { s = "<-"; }
+                                1 => { s = "0"; }
+                                2 => { s = "->"; }
+                                3 => { s = "Ent"; }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                j+=1;
+            }
+            i += 1;
+        }
+        return s;
+    }
+
+    fn is_digit(s: &str) -> bool{
+        let mut flag= true;
+        for ch in s.chars(){
+            if ch < '0' || ch > '9'{ flag = false; }
+        }
+        return flag;
     }
 }
 /*
