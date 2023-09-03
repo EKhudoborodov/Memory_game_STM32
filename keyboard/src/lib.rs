@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
+#![feature(adt_const_params)]
 
 use core::ptr::{addr_of_mut, null, null_mut};
 use embassy_stm32::{self, gpio::{Level, Output, Speed}, into_ref, Peripheral};
@@ -9,9 +10,46 @@ use embassy_stm32::peripherals::{PB7, PB8, PB9};
 use embassy_stm32::time::khz;
 
 
+struct Map <const SIZE: usize, const DIG: usize> {
+    slots: [usize; 255],
+    values: [bool; SIZE],
+    cur_size: usize
+}
+
+impl <const SIZE: usize, const DIG: usize>Map <SIZE, DIG> {
+    fn new(s: &str, digits: [char; DIG]) -> Self {
+        let mut i: usize = 0;
+        let mut slots: [usize; 255] = [0; 255];
+        let mut values: [bool; SIZE] = [false; SIZE];
+        for ch in s.chars(){
+            while i<DIG {
+                values[i] = (ch == digits[i]);
+                i += 1;
+            }
+        }
+        Self {slots, values, cur_size: 40}
+    }
+
+    fn hash_value(&mut self, character: char) -> usize{
+        return (character as u8) as usize;
+    }
+
+    fn put(&mut self, key: char, val: bool){
+        let slot = self.hash_value(key);
+        self.slots[slot] = self.cur_size;
+        self.values[self.cur_size] = val;
+        self.cur_size += 1;
+    }
+
+    fn get(&mut self, character: char) -> bool{
+        let slot = self.hash_value(character);
+        return self.values[self.slots[slot]];
+    }
+}
+
 pub struct Keyboard <'d, const ROW: usize, const COL: usize>{
     input: [Input<'d, AnyPin>; ROW],
-    output: [Output<'d, AnyPin>; COL]
+    output: [Output<'d, AnyPin>; COL],
 }
 fn init_row<'d> (p: AnyPin) -> Input<'d, AnyPin>{
     into_ref!(p);
@@ -23,7 +61,7 @@ fn init_col<'d> (p: AnyPin) -> Output<'d, AnyPin>{
     Output::new(p, Level::Low, Speed::Low)
 }
 
-impl <'d, const ROW: usize, const COL: usize, const BUTK: usize> Keyboard<'d, ROW, COL>{
+impl <'d, const ROW: usize, const COL: usize> Keyboard<'d, ROW, COL>{
     pub fn new(mut inputs: [AnyPin; ROW], mut outputs: [AnyPin; COL]) -> Self{
         Self { input: inputs.map(init_row), output: outputs.map(init_col) }
     }
@@ -39,7 +77,6 @@ impl <'d, const ROW: usize, const COL: usize, const BUTK: usize> Keyboard<'d, RO
         self.output[column].set_low();
         return keys;
     }
-
     /*
     [
     [0 - F1, 1 - F2, 2 - #,  3 - *],
@@ -64,76 +101,21 @@ impl <'d, const ROW: usize, const COL: usize, const BUTK: usize> Keyboard<'d, RO
         return keys;
     }
 
-    pub fn get_pressed(&mut self) -> &str{
-        let keys: [[u8; ROW]; COL] = self.read_key();
+    pub fn get_pressed(&mut self, keys: [[u8; ROW]; COL]) -> u8{
         let mut i: usize = 0; let mut j: usize = 0;
-        let mut s: &str = "";
         while i<COL{
             j = 0;
             while j<ROW {
-                if keys[i][j] == 1{
-                    match i {
-                        0 => {
-                            match j {
-                                0 => { s = "F1"; }
-                                1 => { s = "F2"; }
-                                2 => { s = "#"; }
-                                3 => { s = "*"; }
-                                _ => {}
-                            }
-                        }
-                        1 => {
-                            match j {
-                                0 => { s = "1"; }
-                                1 => { s = "2"; }
-                                2 => { s = "3"; }
-                                3 => { s = "^"; }
-                                _ => {}
-                            }
-                        }
-                        2 => {
-                            match j {
-                                0 => { s = "4"; }
-                                1 => { s = "5"; }
-                                2 => { s = "6"; }
-                                3 => { s = "v"; }
-                                _ => {}
-                            }
-                        }
-                        3 => {
-                            match j {
-                                0 => { s = "7"; }
-                                1 => { s = "8"; }
-                                2 => { s = "9"; }
-                                3 => { s = "Esc"; }
-                                _ => {}
-                            }
-                        }
-                        4 => {
-                            match j {
-                                0 => { s = "<-"; }
-                                1 => { s = "0"; }
-                                2 => { s = "->"; }
-                                3 => { s = "Ent"; }
-                                _ => {}
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+                if keys[i][j] == 1 { return (i*ROW+j+1) as u8 }
                 j+=1;
             }
             i += 1;
         }
-        return s;
+        return 0;
     }
 
-    fn is_digit(s: &str) -> bool{
-        let mut flag= true;
-        for ch in s.chars(){
-            if ch < '0' || ch > '9'{ flag = false; }
-        }
-        return flag;
+    pub fn is_digit(&mut self, s: u8) -> bool {
+        return ((s%5>1)&&(s<15)) || (s==10);
     }
 }
 /*

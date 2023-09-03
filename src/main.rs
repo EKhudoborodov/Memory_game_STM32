@@ -20,6 +20,13 @@ use embassy_stm32::peripherals::{PB7, PB8, PB9};
 use embassy_time::{Duration, Timer};
 
 use {defmt_rtt as _, panic_probe as _};
+const  MAP: [[&str; 4]; 5] = [
+["F1", "F2", "#", "*"],
+["1", "2", "3", "^"],
+["4", "5", "6", "v"],
+["7", "8", "9", "Esc"],
+["<-", "0", "->", "Ent"]
+];
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) -> ! {
@@ -27,7 +34,7 @@ async fn main(_spawner: Spawner) -> ! {
     let a: [AnyPin; 2] = [p.PB9.degrade(), p.PB8.degrade()];
     let b: [AnyPin; 5] = [p.PB4.degrade(), p.PB3.degrade(), p.PA12.degrade(), p.PA11.degrade(), p.PA10.degrade()];
     let c: [AnyPin; 4] = [p.PB14.degrade(), p.PB15.degrade(), p.PA8.degrade(), p.PA9.degrade()];
-    let mut game= Game::new(a, p.PB7, p.PB6, [0;20], [40; 40],b, c, [0; 20]);
+    let mut game= Game::new(a, p.PB7, p.PB6, [0; 16], b, c);
     let mut led = Output::new(p.PC13, Low, Speed::Low);
     let mut end:bool = false;
     let mut tmp: [u64; 17] = [0;17];

@@ -9,16 +9,18 @@ use embassy_stm32::gpio::{AnyPin, Pin, Pull};
 use embassy_stm32::time::khz;
 use embassy_time::{Duration, Timer};
 
-pub struct DisplayAndKeyboard <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: usize, const ROW: usize, const COL: usize, const BUTK: usize> {
-    display: LedAndKey<'d, DIS, BUTD, CLK, DIO, SIZE>,
-    keyboard: Keyboard<'d, ROW, COL, BUTK>,
+
+
+pub struct DisplayAndKeyboard <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const ROW: usize, const COL: usize> {
+    display: LedAndKey<'d, DIS, CLK, DIO>,
+    keyboard: Keyboard<'d, ROW, COL>,
     is_on: [u64; BUTD]
 }
 
-impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: usize, const ROW: usize, const COL: usize, const BUTK: usize> DisplayAndKeyboard<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK>{
-    pub fn new(s: [AnyPin; DIS], c:CLK, d:DIO, for_game: [u8; BUTD], for_map: [u8; SIZE], inputs: [AnyPin; ROW], outputs: [AnyPin; COL], for_key: [u8; BUTK]) -> DisplayAndKeyboard<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK>{
-        let mut display = LedAndKey::new(s,  c, d, for_game, for_map);
-        let mut keyboard = Keyboard::new(inputs, outputs, for_key);
+impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const ROW: usize, const COL: usize> DisplayAndKeyboard<'d, DIS, BUTD, CLK, DIO, ROW, COL>{
+    pub fn new(s: [AnyPin; DIS], c:CLK, d:DIO, for_game: [u8; BUTD], inputs: [AnyPin; ROW], outputs: [AnyPin; COL]) -> DisplayAndKeyboard<'d, DIS, BUTD, CLK, DIO, ROW, COL>{
+        let mut display = LedAndKey::new(s, c, d);
+        let mut keyboard = Keyboard::new(inputs, outputs);
         Self { display, keyboard, is_on: [20; BUTD]}
     }
 
@@ -35,17 +37,11 @@ impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: u
         self.is_on = [20; BUTD];
     }
 
-    pub fn print(&mut self, s: &str){
-        self.display.print(s);
+    pub fn print(&mut self, position: usize, s: &str){
+        self.display.print(position, s);
     }
 
-    pub fn display_send_byte(&mut self, command: [u8; 8]){
-        self.display.send_byte(command);
-    }
-
-    pub fn display_move_cursor(&mut self, position: u8){
-        self.display.move_cursor(position as usize);
-    }
+    fn display_send_byte(&mut self, command: [u8; 8]){ self.display.send_byte(command); }
 
     pub fn swap_b_skin(&mut self){
         self.display.swap_b_skin();
@@ -55,45 +51,53 @@ impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: u
         self.display.swap_d_skin();
     }
 
-    pub fn print_char(&mut self, character: char, cur: usize){
-        self.display.print_char(character);
-        if cur != BUTD {
-            if (character as u8) >= ('0' as u8) && (character as u8) <= ('9' as u8){self.is_on[cur] = (character as u64) - ('0' as u64);}
-            else { self.is_on[cur] = (character as u64) - ('a' as u64) + 10;}
-        }
+    pub fn print_char(&mut self, position: usize, character: char){
+        self.display.print_char(position, character);
+        if (character as u8) >= ('0' as u8) && (character as u8) <= ('9' as u8){self.is_on[position/2] = (character as u64) - ('0' as u64);}
+        else if (character as u8) >= ('a' as u8) && (character as u8) <= ('f' as u8) { self.is_on[position/2] = (character as u64) - ('a' as u64) + 10;}
     }
 
     pub fn get_pressed(&mut self) -> u8 {
-        let mut c: usize = 0;
+        let mut c: usize = 0; let mut d: usize = 0;
         let mut flag1: bool = true; let mut flag2: bool = true;
-        let mut buttons: [u8; BUTK] = [0; BUTK];
-        let mut tmp1: [u8; BUTK] = [0; BUTK];
-        let mut tmp2: [u8; BUTK] = [0; BUTK];
+        let mut buttons: [[u8;  ROW]; COL] = [[0; ROW]; COL];
+        let mut tmp1: [[u8;  ROW]; COL] = [[0; ROW]; COL];
+        let mut tmp2: [[u8;  ROW]; COL] = [[0; ROW]; COL];
         let mut pressed: u8 = 0;
         while flag1 {
             buttons = self.keyboard.read_key();
             c = 0;
-            for but in buttons {
-                if but == 1 { flag1 = false; }
-                tmp1[c] = but;
-                c += 1;
+            for row in buttons {
+                d = 0;
+                for but in row {
+                    if but == 1 { flag1 = false; }
+                    tmp1[d][c] = but;
+                    c += 1;
+                }
+                d += 1;
             }
         }
         while flag2 {
             buttons = self.keyboard.read_key();
             c = 0;
             flag2 = false;
-            for but in buttons {
-                if but == 1 { flag2 = true; };
-                tmp2[c] = tmp1[c];
-                tmp1[c] = but;
-                c += 1;
+            for row in buttons {
+                d = 0;
+                for but in row {
+                    if but == 1 { flag2 = true; };
+                    tmp2[d][c] = tmp1[d][c];
+                    tmp1[d][c] = but;
+                    c += 1;
+                }
+                d += 1;
             }
         }
         c = 1;
-        for but in tmp2 {
-            if but == 1 { pressed = c as u8; break; }
-            c += 1;
+        for row in tmp2 {
+            for but in row {
+                if but == 1 { pressed = c as u8;break; }
+                c += 1;
+            }
         }
         return pressed;
     }
@@ -148,19 +152,17 @@ impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: u
                 p if p%5>1 && p<15 && !f2 => {
                     if zero {
                         character = (((pressed%5-2)*3+(pressed-pressed%5)/5) + ('a' as u8)) as char;
-                        if (character as u8)>('g' as u8){ character = 'g'; }
+                        if (character as u8)>('g' as u8) { character = 'g'; }
                     }
                     else { character = ((pressed%5-2)*3+(pressed-pressed%5)/5 + ('1' as u8)) as char; }
                     if position<BUTD {
-                        self.display_move_cursor((position as u8)*2);
-                        self.print_char(character, position);
+                        self.print_char(position*2, character);
                     } else if (count as u8) < max {
                         if !zero {
                             self.change_is_on(1);
                             self.reprint();
                         }
-                        self.display_move_cursor(30);
-                        self.print_char(character, 15);
+                        self.print_char(30, character);
                         count += 1;
                     }
                     zero = false;
@@ -171,17 +173,15 @@ impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: u
                     tmp += 1;
                 }
                 10 if !f2 => {
-                    if position == BUTD && (count as u8)<max{
+                    if position == BUTD && (count as u8)<max {
                         self.change_is_on(1);
                         self.reprint();
-                        self.display_move_cursor(30);
                         zero = true;
-                        self.print_char('-', BUTD);
+                        self.print_char(30, '-');
                     }
                     else if position < BUTD {
                         zero = true;
-                        self.display.move_cursor(2*position);
-                        self.print_char('-', BUTD);
+                        self.print_char(2*position, '-');
                     }
                 }
                 11 => {
@@ -191,7 +191,7 @@ impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: u
                 }
                 16 if count>0 => {
                     self.change_is_on(-1);
-                    if !f2 {self.reprint();}
+                    if !f2 { self.reprint(); }
                     count -= 1;
                 }
                 _ => {}
@@ -206,10 +206,7 @@ impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: u
         return res;
     }
 
-    fn make_keyboard(&mut self){
-        self.display_move_cursor(0);
-        self.print("123456789abcdefg");
-    }
+    fn make_keyboard(&mut self){ self.print(0,"123456789abcdefg"); }
 
     fn change_is_on(&mut self, edit: isize){
         let mut i: isize = 0; let m: isize = edit;
@@ -229,27 +226,17 @@ impl <'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: u
     }
 
     fn reprint(&mut self){
-        let mut i: usize = 0;
-        while i < BUTD {
-            self.display_move_cursor((i*2) as u8);
-            if self.is_on[i] < 10 {self.print_char((self.is_on[i] as u8 + ('0' as u8)) as char, i);}
-            else if self.is_on[i] < 17 { self.print_char(((self.is_on[i]%10) as u8 + ('a' as u8)) as char, i); }
-            else{ self.display_move_cursor((i*2) as u8); self.display_send_byte([0; 8]); }
-            i += 1;
+        for i in 0..BUTD {
+            if self.is_on[i] < 10 {self.print_char(i*2, (self.is_on[i] as u8 + ('0' as u8)) as char);}
+            else if self.is_on[i] < 17 { self.print_char(i*2, ((self.is_on[i]%10) as u8 + ('a' as u8)) as char); }
+            else{ self.print_char(i*2, ' '); }
         }
     }
 
     pub fn cursor(&mut self, blinking: [u8; 16]){
-        let mut i: usize = 0;
-        while i<BUTD {
-            if blinking[i] == 1{
-                self.display_move_cursor((i*2+1) as u8);
-                self.display_send_byte([1; 8]);
-            }else{
-                self.display_move_cursor((i*2+1) as u8);
-                self.display_send_byte([0; 8]);
-            }
-            i += 1;
+        for i in 0..BUTD {
+            if blinking[i] == 1{ self.print_char(i*2+1, 'B'); }
+            else { self.print_char(i*2+1, ' '); }
         }
     }
 

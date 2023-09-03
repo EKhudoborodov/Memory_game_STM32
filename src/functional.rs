@@ -18,8 +18,8 @@ use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
 use display_with_keyboard::DisplayAndKeyboard;
 
-pub(crate) struct Game<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: usize, const ROW: usize, const COL: usize, const BUTK: usize> {
-    board: DisplayAndKeyboard<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK>,
+pub(crate) struct Game<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const ROW: usize, const COL: usize> {
+    board: DisplayAndKeyboard<'d, DIS, BUTD, CLK, DIO, ROW, COL>,
     difficulty: u8,
     brightness: u8,
     fixed: u8,
@@ -28,56 +28,32 @@ pub(crate) struct Game<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: P
     score: u64,
 }
 
-impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: usize, const ROW: usize, const COL: usize, const BUTK: usize> Game<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK> {
-    pub(crate) fn new(s: [AnyPin; DIS], c: CLK, d: DIO, for_game: [u8; BUTD], for_map: [u8; SIZE], inputs: [AnyPin; ROW], outputs: [AnyPin; COL], for_key: [u8; BUTK]) -> Game<'d, DIS, BUTD, CLK, DIO,SIZE, ROW, COL, BUTK> {
-        let b = DisplayAndKeyboard::new(s, c, d, for_game, for_map, inputs, outputs, for_key);
+impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const ROW: usize, const COL: usize> Game<'d, DIS, BUTD, CLK, DIO, ROW, COL> {
+    pub(crate) fn new(s: [AnyPin; DIS], c: CLK, d: DIO, for_game: [u8; BUTD], inputs: [AnyPin; ROW], outputs: [AnyPin; COL]) -> Game<'d, DIS, BUTD, CLK, DIO, ROW, COL> {
+        let b = DisplayAndKeyboard::new(s, c, d, for_game, inputs, outputs);
         Self { board: b, difficulty: 2, brightness: 4, fixed: 1, max: 16, thing_for_small_random: 0, score: 0 }
     }
 
     pub(crate) async fn loading(&mut self) {
         self.board.clean_display();
         self.board.turn_on_display(self.brightness);
-        self.board.display_move_cursor(0);
-        self.board.print_char('-', 16);
-        self.board.display_send_byte([1; 8]);
+        self.board.print_char(0, '-');
+        self.board.print_char(1, 'B');
         Timer::after(Duration::from_millis(100)).await;
-        let mut count: u8 = 1;
-        while count < 8 {
-            self.board.display_move_cursor((count - 1) * 2);
-            self.board.display_send_byte([0; 8]);
-            self.board.display_send_byte([0; 8]);
-            self.board.print_char('-', 16);
-            self.board.display_send_byte([1; 8]);
+        for count in 0..16 {
+            self.board.print_char((count - 1) * 2, ' ');
+            self.board.print_char((count - 1) * 2+1, ' ');
+            self.board.print_char(count*2, '-');
+            self.board.print_char(count*2, 'B');
             Timer::after(Duration::from_millis(100)).await;
-            count += 1;
-        }
-        self.board.display_move_cursor(14);
-        self.board.display_send_byte([0; 8]);
-        self.board.display_send_byte([0; 8]);
-        self.board.display_move_cursor(16);
-        self.board.print_char('-', 16);
-        self.board.display_send_byte([1; 8]);
-        count += 1;
-        Timer::after(Duration::from_millis(100)).await;
-        while count < 16 {
-            self.board.display_move_cursor((count - 1) * 2);
-            self.board.display_send_byte([0; 8]);
-            self.board.display_send_byte([0; 8]);
-            self.board.print_char('-', 16);
-            self.board.display_send_byte([1; 8]);
-            Timer::after(Duration::from_millis(100)).await;
-            count += 1;
         }
     }
 
     pub(crate) fn start(&mut self) {
         self.board.turn_on_display(self.brightness);
         self.board.clean_display();
-        self.board.display_move_cursor(0);
-        self.board.print("start");
-        self.board.display_move_cursor(16);
-        self.board.print("settings");
-        //lights(&mut display);
+        self.board.print(0, "start");
+        self.board.print(16, "settings");
     }
 
     pub(crate) fn start_menu(&mut self) -> bool {
@@ -90,27 +66,19 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
         loop {
             pressed = self.board.get_pressed();
             if pressed == 20 || (pressed % 5 > 1 && pressed < 15) || pressed == 10 { break; }
-            if pressed == 1 {
-                position = 0;
-                break;
-            }
-            if pressed == 6 {
-                position = 1;
-                break;
-            }
+            if pressed == 1 { position = 0; break; }
+            if pressed == 6 { position = 1; break; }
             if pressed == 5 && position == 1 {
                 i = 0;
-                while i < 8 {
-                    blinking[i] = 1;
-                    i += 1;
-                }
+                while i < 8 { blinking[i] = 1; i += 1; }
                 while i < 16 {
                     blinking[i] = 0;
                     i += 1;
                 }
                 position = 0;
                 self.board.cursor(blinking);
-            } else if pressed == 15 && position == 0 {
+            }
+            else if pressed == 15 && position == 0 {
                 i = 0;
                 while i < 8 {
                     blinking[i] = 0;
@@ -131,22 +99,12 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
 
     pub(crate) fn start_settings(&mut self) {
         self.board.clean_display();
-        self.board.display_move_cursor(0);
-        self.board.print("back");
-        self.board.display_move_cursor(10);
-        self.board.print_char('b', 16);
-        self.board.display_move_cursor(14);
-        self.board.print_char('d', 16);
-        self.board.display_move_cursor(16);
-        self.board.print("d");
-        if self.difficulty < 10 { self.board.print_char((self.difficulty + ('0' as u8)) as char, 16); }
-        else { self.board.print_char(((self.difficulty % 10) + ('a' as u8)) as char, 16); }
-        self.board.display_move_cursor(22);
-        self.board.print("b");
-        self.board.print_char((self.brightness + ('1' as u8)) as char, 16);
-        self.board.display_move_cursor(28);
-        if self.fixed == 1 { self.board.print("fy"); } else { self.board.print("fn"); }
-        //lights(&mut display);
+        self.board.print(0, "back b dd");
+        if self.difficulty < 10 { self.board.print_char(18, (self.difficulty + ('0' as u8)) as char); }
+        else { self.board.print_char(18, ((self.difficulty % 10) + ('a' as u8)) as char); }
+        self.board.print(22, "b");
+        self.board.print_char(24, (self.brightness + ('1' as u8)) as char);
+        if self.fixed == 1 { self.board.print(28, "fy"); } else { self.board.print(28, "fn"); }
     }
 
     pub(crate) fn settings(&mut self) {
@@ -185,27 +143,16 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
                     match position {
                         1 => {
                             self.board.swap_b_skin();
-                            self.board.display_move_cursor(0);
-                            self.board.print_char('b', 16);
-                            self.board.display_move_cursor(10);
-                            self.board.print_char('b', 16);
-                            if self.difficulty == 11 {
-                                self.board.display_move_cursor(18);
-                                self.board.print_char('b', 16);
-                            }
-                            self.board.display_move_cursor(22);
-                            self.board.print_char('b', 16);
+                            self.board.print_char(0, 'b');
+                            self.board.print_char(10, 'b');
+                            if self.difficulty == 11 { self.board.print_char(18, 'b'); }
+                            self.board.print_char(22, 'b');
                         }
                         2 => {
                             self.board.swap_d_skin();
-                            self.board.display_move_cursor(14);
-                            self.board.print_char('d', 16);
-                            self.board.display_move_cursor(16);
-                            self.board.print_char('d', 16);
-                            if self.difficulty == 13 {
-                                self.board.display_move_cursor(18);
-                                self.board.print_char('d', 16);
-                            }
+                            self.board.print_char(14, 'd');
+                            self.board.print_char(16, 'd');
+                            if self.difficulty == 13 { self.board.print_char(18, 'd'); }
                         }
                         3 => {
                             if pressed == 18 {
@@ -215,8 +162,7 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
                                 self.difficulty %= 16;
                                 self.difficulty += 1;
                             }
-                            self.board.display_move_cursor(18);
-                            if self.difficulty < 10 { self.board.print_char((self.difficulty + ('0' as u8)) as char, 16); } else { self.board.print_char(((self.difficulty % 10) + ('a' as u8)) as char, 16); }
+                            if self.difficulty < 10 { self.board.print_char(18,(self.difficulty + ('0' as u8)) as char); } else { self.board.print_char(18,((self.difficulty % 10) + ('a' as u8)) as char); }
                         }
                         4 => {
                             if pressed == 18 {
@@ -227,13 +173,11 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
                                 self.brightness %= 8;
                             }
                             self.board.turn_on_display(self.brightness);
-                            self.board.display_move_cursor(24);
-                            self.board.print_char((self.brightness + ('1' as u8)) as char, 16);
+                            self.board.print_char(24, (self.brightness + ('1' as u8)) as char);
                         }
                         5 => {
                             self.fixed = 1 - self.fixed;
-                            self.board.display_move_cursor(30);
-                            if self.fixed == 1 { self.board.print_char('y', 16); } else { self.board.print_char('n', 16); }
+                            if self.fixed == 1 { self.board.print_char(30,'y'); } else { self.board.print_char(30, 'n'); }
                         }
                         _ => {}
                     }
@@ -246,28 +190,17 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
 
     pub(crate) async fn round_start(&mut self) {
         self.board.clean_display();
-        let mut count: u8 = 0;
-        while count < 3 {
-            self.board.display_move_cursor(count * 6);
-            self.board.print_char((('3' as u8) - count) as char, 16);
-            self.board.display_move_cursor(30 - count * 6);
-            self.board.print_char((('3' as u8) - count) as char, 16);
-            let mut c: u8 = 0;
-            while c < 8 {
-                self.board.display_move_cursor(1 + c * 2);
-                self.board.display_send_byte([1; 8]);
-                self.board.display_move_cursor(31 - c * 2);
-                self.board.display_send_byte([1; 8]);
-                c += 1;
+        for count in 0..3 {
+            self.board.print_char(count*6,(('3' as u8) - count as u8) as char);
+            self.board.print_char(30-count*6, (('3' as u8) - count as u8) as char);
+            for c in 0..8 {
+                self.board.print_char(c*2+1, 'B');
+                self.board.print_char(31-c*2, 'B');
                 Timer::after(Duration::from_millis(100)).await;
             }
             self.board.clean_display();
-            count += 1;
         }
-        self.board.display_move_cursor(14);
-        self.board.print_char('G', 16);
-        self.board.display_move_cursor(16);
-        self.board.print_char('O', 16);
+        self.board.print(14,"GO");
         self.lights();
         Timer::after(Duration::from_millis(1000)).await;
         self.board.clean_display();
@@ -276,24 +209,22 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
 
 
     pub(crate) async fn show_digits(&mut self) -> [u64; 10] {
-        let mut i: u64 = 0;
         let mut res: [u64; 10] = [0; 10];
-        while i < (3 + ((self.difficulty as u64) - 1) / 2) {
+        let mut position = 0;
+        for i in 0..(3 + ((self.difficulty as u64) - 1) / 2) {
             let mut generator = SmallRng::seed_from_u64(self.thing_for_small_random + i);
             let rand_num = generator.gen_range(1..=self.max);
             res[i as usize] = rand_num;
-            if self.fixed == 1 { self.board.display_move_cursor(((rand_num - 1) * 2) as u8); }
+            if self.fixed == 1 { position = ((rand_num - 1) * 2); }
             else {
                 let mut generator = SmallRng::seed_from_u64(self.thing_for_small_random + i + 128);
-                let rand_pos = generator.gen_range(1..=self.max);
-                self.board.display_move_cursor(((rand_pos - 1) * 2) as u8);
+                position = (generator.gen_range(1..=self.max)-1)*2;
             }
-            if rand_num > 9 { self.board.print_char(((rand_num as u8) - 10 + ('a' as u8)) as char, 16); } else { self.board.print_char(((rand_num as u8) + ('0' as u8)) as char, 16); }
-            self.board.display_send_byte([1; 8]);
+            if rand_num > 9 { self.board.print_char(position as usize, ((rand_num as u8) - 10 + ('a' as u8)) as char); } else { self.board.print_char(position as usize, ((rand_num as u8) + ('0' as u8)) as char); }
+            self.board.print_char(position as usize + 1, 'B');
             if self.difficulty % 2 == 0 { Timer::after(Duration::from_millis(500)).await; } else { Timer::after(Duration::from_millis(1000)).await; }
             self.board.clean_display();
             Timer::after(Duration::from_millis(200)).await;
-            i += 1;
         }
         return res;
     }
@@ -337,43 +268,30 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
 
     async fn right_answer(&mut self) {
         self.board.clean_display();
-        self.board.display_move_cursor(0);
-        self.board.print("SCORE");
+        self.board.print(0, "SCORE");
         self.score += 1;
-        self.board.display_move_cursor(((15 - ((self.score >= 10) as u64) - ((self.score >= 100) as u64)) * 2) as u8);
         if self.score >= 100 {
-            self.board.print_char((((self.score / 100) as u8) + ('0' as u8)) as char, 16);
-            self.board.display_send_byte([0; 8]);
+            self.board.print_char(26, (((self.score / 100) as u8) + ('0' as u8)) as char);
         }
         if self.score >= 10 {
-            self.board.print_char(((((self.score % 100) / 10) as u8) + ('0' as u8)) as char, 16);
-            self.board.display_send_byte([0; 8]);
+            self.board.print_char(28, ((((self.score % 100) / 10) as u8) + ('0' as u8)) as char);
         }
-        self.board.print_char((((self.score % 10) as u8) + ('0' as u8)) as char, 16);
-        let mut count: u8 = 1;
-        while count < 16 {
-            if count % 8 == 0 { self.board.display_move_cursor(15); } else { self.board.display_move_cursor((count % 8) * 2 - 1); }
-            self.board.display_send_byte([0; 8]);
-            if count % 8 == 0 { self.board.display_move_cursor(17); } else { self.board.display_move_cursor(31 - ((count - 1) % 8) * 2); }
-            self.board.display_send_byte([0; 8]);
-            self.board.display_move_cursor((count % 8) * 2 + 1);
-            self.board.display_send_byte([1; 8]);
-            self.board.display_move_cursor(31 - (count % 8) * 2);
-            self.board.display_send_byte([1; 8]);
+        self.board.print_char(30, (((self.score % 10) as u8) + ('0' as u8)) as char);
+        for count in  0..16 {
+            self.board.print_char( (count%8)*2+1, ' ');
+            self.board.print_char( 31-(count%8)*2, ' ');
+            self.board.print_char( ((count+1)%8)*2+1, 'B');
+            self.board.print_char( 31-((count+1)%8)*2, 'B');
             Timer::after(Duration::from_millis(100)).await;
-            count += 1;
         }
     }
 
     async fn game_over(&mut self) {
-        let mut count: u8 = 0;
         self.board.clean_display();
-        self.board.display_move_cursor(8);
-        self.board.print("GAMEOVER");
+        self.board.print(8, "GAMEOVER");
         self.lights();
-        while count < 7 {
+        for count in 0..7 {
             self.board.turn_on_display(6 - count);
-            count += 1;
             Timer::after(Duration::from_millis(400)).await;
         }
         self.board.turn_off_display();
@@ -381,30 +299,13 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
     }
 
     fn quit(&mut self) {
-        self.board.display_move_cursor(0);
-        let mut i: u8 = 0;
-        while i < 8 {
-            self.board.display_send_byte([0; 8]);
-            self.board.display_send_byte([0; 8]);
-            i += 1;
-        } self.board.display_move_cursor(16);
-        while i < 16 {
-            self.board.display_send_byte([0; 8]);
-            self.board.display_send_byte([0; 8]);
-            i += 1;
-        }
-        self.board.display_move_cursor(0);
-        self.board.print("quit");
-        self.board.display_move_cursor(16);
-        self.board.print("yes");
-        self.board.display_move_cursor(28);
-        self.board.print("no");
+        self.board.print(1, "                ");
+        self.board.print(0, "quit    yes   no");
     }
 
     fn quit_menu(&mut self) -> bool {
         let mut pressed: u8 = 0;
         let mut position: u8 = 1;
-        let mut i: usize = 0;
         let mut blinking: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1];
         self.board.cursor(blinking);
         loop {
@@ -414,29 +315,21 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
                 1 => { position = 0; break; }
                 p if  p==6 || p==9 => { position = 1; break; }
                 5 if position == 1 => {
-                    i = 8;
-                    while i < 11 {
+                    for i in 8..11 {
                         blinking[i] = 1;
-                        i += 1;
                     }
-                    i = 14;
-                    while i < 16 {
+                    for i in 14..16 {
                         blinking[i] = 0;
-                        i += 1;
                     }
                     position = 0;
                     self.board.cursor(blinking);
                 }
                 15 if position == 0 => {
-                    i = 8;
-                    while i < 11 {
+                    for i in 8..11 {
                         blinking[i] = 0;
-                        i += 1;
                     }
-                    i = 14;
-                    while i < 16 {
+                    for i in 14..16 {
                         blinking[i] = 1;
-                        i += 1;
                     }
                     position = 1;
                     self.board.cursor(blinking);
@@ -450,11 +343,8 @@ impl<'d, const DIS: usize, const BUTD: usize, CLK: Pin, DIO: Pin, const SIZE: us
     }
 
     fn lights(&mut self) {
-        let mut count = 0;
-        while count < 16 {
-            self.board.display_move_cursor(count * 2 + 1);
-            self.board.display_send_byte([1; 8]);
-            count += 1;
+        for count in 0..16 {
+            self.board.print_char(count * 2 + 1, 'B');
         }
     }
 }
